@@ -1663,7 +1663,11 @@ std::vector<Tensor> prod_bw(
 
     const bool all_dimensions = !dim.has_value();
     const bool keepdim = !all_dimensions;
-    Tensor prod_result = ttnn::prod(input, dim, keepdim, output_memory_config);
+    Tensor is_zero = ttnn::eqz(input, output_memory_config);
+    Tensor num_zeros = ttnn::sum(is_zero, dim, keepdim, output_memory_config);
+    Tensor ones = ttnn::ones_like(input, input.dtype(), input.layout(), output_memory_config);
+    Tensor input_nonzero = ttnn::where(is_zero, ones, input, output_memory_config);
+    Tensor prod_result = ttnn::prod(input_nonzero, dim, keepdim, output_memory_config);
 
     if (prod_result.layout() == Layout::ROW_MAJOR && prod_result.storage_type() == StorageType::DEVICE) {
         prod_result = ttnn::operations::unary_backward::change_layout_to_tile(prod_result, output_memory_config);
@@ -1674,8 +1678,12 @@ std::vector<Tensor> prod_bw(
             prod_result, grad, std::nullopt, output_memory_config);  // result is stored in the first position
         Tensor fill_tensor = ttnn::fill_first_val_into_tensor<::bfloat16>(
             temp, temp.dtype(), temp.layout(), temp.device(), output_memory_config);
-        Tensor all_dimension_result = ttnn::multiply(
-            ttnn::reciprocal(input, output_memory_config), fill_tensor, std::nullopt, output_memory_config);
+        Tensor grad_nonzero = ttnn::multiply(
+            ttnn::reciprocal(input_nonzero, output_memory_config), fill_tensor, std::nullopt, output_memory_config);
+        Tensor zeros = ttnn::zeros_like(input, input.dtype(), input.layout(), output_memory_config);
+        Tensor res = ttnn::where(is_zero, fill_tensor, grad_nonzero, output_memory_config);
+        Tensor gt_one_zero = ttnn::gtz(ttnn::subtract(num_zeros, 1.0f, std::nullopt, output_memory_config), output_memory_config);
+        Tensor all_dimension_result = ttnn::where(gt_one_zero, zeros, res, output_memory_config);
         grad_tensor.emplace_back(all_dimension_result);
         return grad_tensor;
     }
@@ -1712,7 +1720,7 @@ std::vector<Tensor> prod_bw(
             }
         }
     }
-    Tensor reciprocal_input = ttnn::reciprocal(input, output_memory_config);
+    Tensor reciprocal_input = ttnn::reciprocal(input_nonzero, output_memory_config);
     Tensor temp = ttnn::multiply(
         prod_result,
         (*dim == 1 || *dim == 0 || *dim == -4 || *dim == -3) ? grad : updated_grad,
@@ -1724,13 +1732,21 @@ std::vector<Tensor> prod_bw(
     if (*dim == 3 || *dim == -1) {
         Tensor grad_result =
             ttnn::bcast(reciprocal_input, temp, ttnn::BcastOpMath::MUL, ttnn::BcastOpDim::W, output_memory_config);
-        grad_tensor.emplace_back(grad_result);
+        Tensor zeros = ttnn::zeros_like(input, input.dtype(), input.layout(), output_memory_config);
+        Tensor res = ttnn::where(is_zero, temp, grad_result, output_memory_config);
+        Tensor gt_one_zero = ttnn::gtz(ttnn::subtract(num_zeros, 1.0f, std::nullopt, output_memory_config), output_memory_config);
+        Tensor final_grad = ttnn::where(gt_one_zero, zeros, res, output_memory_config);
+        grad_tensor.emplace_back(final_grad);
         return grad_tensor;
     }
     if (*dim == 2 || *dim == -2) {
         Tensor grad_result =
             ttnn::bcast(reciprocal_input, temp, ttnn::BcastOpMath::MUL, ttnn::BcastOpDim::H, output_memory_config);
-        grad_tensor.emplace_back(grad_result);
+        Tensor zeros = ttnn::zeros_like(input, input.dtype(), input.layout(), output_memory_config);
+        Tensor res = ttnn::where(is_zero, temp, grad_result, output_memory_config);
+        Tensor gt_one_zero = ttnn::gtz(ttnn::subtract(num_zeros, 1.0f, std::nullopt, output_memory_config), output_memory_config);
+        Tensor final_grad = ttnn::where(gt_one_zero, zeros, res, output_memory_config);
+        grad_tensor.emplace_back(final_grad);
         return grad_tensor;
     }
     if (*dim == 1 || *dim == -3) {
@@ -1780,7 +1796,11 @@ std::vector<Tensor> prod_bw(
             auto step = ttsl::SmallVector<uint32_t>({1, 1, 1, 1});
             grad_result = ttnn::slice(result, start_index, end_index, step, std::nullopt);
         }
-        grad_tensor.emplace_back(grad_result);
+        Tensor zeros = ttnn::zeros_like(input, input.dtype(), input.layout(), output_memory_config);
+        Tensor res = ttnn::where(is_zero, temp, grad_result, output_memory_config);
+        Tensor gt_one_zero = ttnn::gtz(ttnn::subtract(num_zeros, 1.0f, std::nullopt, output_memory_config), output_memory_config);
+        Tensor final_grad = ttnn::where(gt_one_zero, zeros, res, output_memory_config);
+        grad_tensor.emplace_back(final_grad);
         return grad_tensor;
     }
     // dim 0
@@ -1828,7 +1848,11 @@ std::vector<Tensor> prod_bw(
             input.padded_shape()[0], input.padded_shape()[1], input.padded_shape()[2], input.padded_shape()[3]};
         grad_result = ttnn::slice(result, start_index, end_index, step, std::nullopt);
     }
-    grad_tensor.emplace_back(grad_result);
+    Tensor zeros = ttnn::zeros_like(input, input.dtype(), input.layout(), output_memory_config);
+    Tensor res = ttnn::where(is_zero, temp, grad_result, output_memory_config);
+    Tensor gt_one_zero = ttnn::gtz(ttnn::subtract(num_zeros, 1.0f, std::nullopt, output_memory_config), output_memory_config);
+    Tensor final_grad = ttnn::where(gt_one_zero, zeros, res, output_memory_config);
+    grad_tensor.emplace_back(final_grad);
     return grad_tensor;
 }
 
