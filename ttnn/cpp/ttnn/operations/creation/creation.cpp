@@ -186,6 +186,18 @@ Tensor full_impl(
     MemoryConfig mem_cfg = optional_output_tensor.has_value() ? optional_output_tensor.value().memory_config()
                                                               : memory_config.value_or(ttnn::DRAM_MEMORY_CONFIG);
 
+    const bool is_tile_layout = (layout_value == Layout::TILE);
+    if (device_to_use != nullptr && is_tile_layout &&
+        (dtype_value == DataType::BFLOAT8_B || dtype_value == DataType::BFLOAT16 || dtype_value == DataType::FLOAT32)) {
+        if (optional_output_tensor.has_value() && optional_output_tensor->storage_type() == StorageType::DEVICE &&
+            dtype_value == optional_output_tensor->dtype() && optional_output_tensor->layout() == Layout::TILE) {
+            return ttnn::fill(*optional_output_tensor, static_cast<float>(fill_value), mem_cfg, optional_output_tensor);
+        } else if (!optional_output_tensor.has_value()) {
+            Tensor output = ttnn::empty(shape_value, dtype_value, layout_value, device_to_use, mem_cfg);
+            return ttnn::fill(output, static_cast<float>(fill_value), mem_cfg, std::nullopt);
+        }
+    }
+
     auto concrete_full = [&]<typename BufferType>(BufferType fill_value) {
         return creation_detail::full_impl<BufferType>(
             shape_value, fill_value, layout_value, device_to_use, mem_cfg, optional_output_tensor);
