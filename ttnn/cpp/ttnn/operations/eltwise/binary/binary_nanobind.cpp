@@ -1282,6 +1282,7 @@ void bind_div(
 
 TTNN_FAST_APPROX_BINDING_WRAPPERS(add, ttnn::add)
 TTNN_FAST_APPROX_BINDING_WRAPPERS(subtract, ttnn::subtract)
+TTNN_FAST_APPROX_BINDING_WRAPPERS(bias_gelu, ttnn::bias_gelu)
 
 #undef TTNN_FAST_APPROX_BINDING_WRAPPERS
 
@@ -2072,15 +2073,16 @@ void py_module(nb::module_& mod) {
         detail::kArithmeticFpuDtypes,
         detail::kMixedFloatFamilyFootnote);
 
-    detail::bind_binary_operation<"bias_gelu">(
+    detail::bind_binary_operation_with_fast_approx<"bias_gelu">(
         mod,
         R"doc(Computes bias_gelu of :attr:`input_tensor_a` and :attr:`input_tensor_b` and returns the tensor with the same layout as :attr:`input_tensor_a`)doc",
         R"doc(\mathrm{{output\_tensor}} = \verb|bias_gelu|(\mathrm{{input\_tensor\_a,input\_tensor\_b}}))doc",
-        static_cast<detail::BinaryOpTensorScalarFn>(&ttnn::bias_gelu),
-        static_cast<detail::BinaryOpTensorTensorFn>(&ttnn::bias_gelu),
-        ". ",
+        &detail::bias_gelu_fast_approx_tensor_scalar,
+        &detail::bias_gelu_fast_approx_tensor_tensor,
         detail::kFloatOnlyDtypes,
-        detail::kSameDtypeRequiredFootnote);
+        detail::kSameDtypeRequiredFootnote,
+        detail::kAdditiveFastApproxPostNote,
+        /*fast_approx_default*/ false);
 
     detail::bind_binary_operation_with_fast_approx<"multiply">(
         mod,
@@ -2522,14 +2524,16 @@ void py_module(nb::module_& mod) {
         detail::kAdditiveFastApproxPostNote,
         /*fast_approx_default*/ true);
 
-    detail::bind_inplace_operation<"bias_gelu_">(
+    detail::bind_inplace_operation_with_fast_approx<"bias_gelu_">(
         mod,
         R"doc(Performs bias_gelu in-place operation on :attr:`input_a` and :attr:`input_b` and returns the tensor with the same layout as :attr:`input_tensor`)doc",
         R"doc(\verb|bias_gelu|(\mathrm{{input\_tensor\_a,input\_tensor\_b}}))doc",
-        static_cast<detail::InplaceScalarFn>(&ttnn::bias_gelu_),
-        static_cast<detail::InplaceTensorFn>(&ttnn::bias_gelu_),
+        static_cast<detail::InplaceFastApproxScalarFn>(&ttnn::bias_gelu_),
+        static_cast<detail::InplaceFastApproxTensorFn>(&ttnn::bias_gelu_),
         detail::kFloatOnlyDtypes,
-        detail::kSameDtypeRequiredFootnote);
+        detail::kSameDtypeRequiredFootnote,
+        detail::kAdditiveFastApproxPostNote,
+        /*fast_approx_default*/ false);
 
     detail::bind_power(
         mod,

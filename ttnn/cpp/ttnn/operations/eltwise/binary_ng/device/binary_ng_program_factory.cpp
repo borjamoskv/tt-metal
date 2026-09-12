@@ -970,7 +970,12 @@ tt::tt_metal::ProgramDescriptor BinaryNgDeviceOperation::ProgramFactory::create_
         }
 
         if (op_config.postprocess.has_value()) {
-            post_activations.insert(post_activations.begin(), *op_config.postprocess);
+            if (operation_attributes.binary_op_type == BinaryOpType::BIAS_GELU) {
+                const float approx_mode = operation_attributes.fast_and_approximate_mode.value_or(false) ? 1.0f : 0.0f;
+                post_activations.insert(post_activations.begin(), unary::EltwiseUnaryWithParam(unary::UnaryOpType::GELU, approx_mode));
+            } else {
+                post_activations.insert(post_activations.begin(), *op_config.postprocess);
+            }
         }
 
         bool is_integer_division =
