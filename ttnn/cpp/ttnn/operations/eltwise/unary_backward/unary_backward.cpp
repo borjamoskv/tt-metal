@@ -156,18 +156,14 @@ std::vector<Tensor> softplus_bw(
     const std::optional<MemoryConfig>& output_mem_config) {
     std::vector<Tensor> grad_tensor;
     Tensor mul_input_beta = ttnn::multiply(input, beta, std::nullopt, output_mem_config);
-    Tensor exp_beta_self = ttnn::exp(mul_input_beta, false, output_mem_config);
     Tensor sub_result = ttnn::add(mul_input_beta, -threshold, std::nullopt, output_mem_config);
-    Tensor temp = ttnn::multiply(
-        ttnn::multiply(grad, exp_beta_self, std::nullopt, output_mem_config),
-        ttnn::reciprocal(ttnn::add(exp_beta_self, 1.0f, std::nullopt, output_mem_config), output_mem_config),
-        std::nullopt,
-        output_mem_config);
-    Tensor grad_result = ttnn::where(ttnn::gtz(sub_result, output_mem_config), grad, temp, output_mem_config);
+    Tensor sig = ttnn::sigmoid(mul_input_beta, output_mem_config);
     mul_input_beta.deallocate();
-    exp_beta_self.deallocate();
+    Tensor factor = ttnn::where(ttnn::gtz(sub_result, output_mem_config), 1.0f, sig, output_mem_config);
     sub_result.deallocate();
-    temp.deallocate();
+    sig.deallocate();
+    Tensor grad_result = ttnn::multiply(grad, factor, std::nullopt, output_mem_config);
+    factor.deallocate();
     grad_tensor.emplace_back(grad_result);
     return grad_tensor;
 }
