@@ -909,16 +909,13 @@ std::vector<std::optional<Tensor>> silu_bw(
 std::vector<Tensor> selu_bw(
     const Tensor& grad, const Tensor& input, const std::optional<MemoryConfig>& output_mem_config) {
     std::vector<Tensor> grad_tensor;
-    Tensor grad_lambd = ttnn::multiply(grad, 1.0507f, std::nullopt, output_mem_config);
-    Tensor grad_result = where(
-        ttnn::gtz(input, output_mem_config),
-        grad_lambd,
-        ttnn::multiply(
-            ttnn::multiply(grad_lambd, 1.673260f, std::nullopt, output_mem_config),
-            ttnn::exp(input, false, output_mem_config),
-            std::nullopt,
-            output_mem_config),
-        output_mem_config);
+    constexpr float scale = 1.0507009873554805f;
+    constexpr float scale_alpha = 1.7580993408473766f;
+    Tensor exp_scaled = ttnn::multiply(ttnn::exp(input, false, output_mem_config), scale_alpha, std::nullopt, output_mem_config);
+    Tensor grad_factor = ttnn::where(ttnn::gtz(input, output_mem_config), scale, exp_scaled, output_mem_config);
+    exp_scaled.deallocate();
+    Tensor grad_result = ttnn::multiply(grad, grad_factor, std::nullopt, output_mem_config);
+    grad_factor.deallocate();
     grad_tensor.emplace_back(grad_result);
     return grad_tensor;
 }
