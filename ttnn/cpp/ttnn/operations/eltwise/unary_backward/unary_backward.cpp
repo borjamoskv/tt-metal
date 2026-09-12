@@ -695,20 +695,25 @@ std::vector<Tensor> logit_bw(
         ttnn::le(input, 1.0f, std::nullopt, output_mem_config),
         std::nullopt,
         output_mem_config);
-    grad_result = where(ttnn::eq(status, 1.0f, std::nullopt, output_mem_config), grad_result, std::nanf(""));
+    grad_result = where(status, grad_result, std::nanf(""));
+    status.deallocate();
+    Tensor at_boundary = ttnn::logical_or(
+        ttnn::eq(input, 0.0f, std::nullopt, output_mem_config),
+        ttnn::eq(input, 1.0f, std::nullopt, output_mem_config),
+        std::nullopt,
+        output_mem_config);
+    Tensor signed_inf = ttnn::multiply(
+        ttnn::sign(grad, output_mem_config),
+        std::numeric_limits<float>::infinity(),
+        std::nullopt,
+        output_mem_config);
     grad_result = where(
-        ttnn::logical_or(
-            ttnn::eq(input, 0.0f, std::nullopt, output_mem_config),
-            ttnn::eq(input, 1.0f, std::nullopt, output_mem_config),
-            std::nullopt,
-            output_mem_config),
-        ttnn::multiply(
-            ttnn::sign(grad, output_mem_config),
-            std::numeric_limits<float>::infinity(),
-            std::nullopt,
-            output_mem_config),
+        at_boundary,
+        signed_inf,
         grad_result,
         output_mem_config);
+    at_boundary.deallocate();
+    signed_inf.deallocate();
 
     grad_tensor.emplace_back(grad_result);
     return grad_tensor;
