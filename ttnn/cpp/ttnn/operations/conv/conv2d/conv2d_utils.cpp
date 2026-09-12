@@ -538,11 +538,12 @@ bool is_1d_depthwise_conv(
     uint32_t output_channels,
     uint32_t kernel_height,
     uint32_t image_height,
-    bool has_bias) {
+    bool has_bias,
+    bool has_activation) {
     bool is_depthwise_conv = groups == input_channels && groups == output_channels;
     // 1D depthwise path supports kernel_height == 1 (and any kernel_width >= 1). The kw>1 case
     // accumulates across kernel taps via per-tap blocks in the depthwise factory.
-    return is_depthwise_conv && is_1d_conv(kernel_height, image_height) && !has_bias;
+    return is_depthwise_conv && is_1d_conv(kernel_height, image_height) && !has_bias && !has_activation;
 }
 
 bool should_coalesce_1d_depthwise_conv_reads(
