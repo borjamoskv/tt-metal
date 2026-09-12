@@ -62,7 +62,8 @@ bool is_1d_depthwise_conv(
     uint32_t output_channels,
     uint32_t kernel_height,
     uint32_t image_height,
-    bool has_bias);
+    bool has_bias,
+    bool has_activation = false);
 
 bool should_coalesce_1d_depthwise_conv_reads(
     bool is_1d_depthwise_conv,
